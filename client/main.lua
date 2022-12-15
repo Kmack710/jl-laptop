@@ -1,4 +1,9 @@
-local QBCore = exports['qb-core']:GetCoreObject()
+local Framework = exports['710-lib']:GetFrameworkObject()
+local GConfig = Framework.Config()
+local QBCore = {}
+if GConfig.Framework == "qbcore" then
+    QBCore = exports['qb-core']:GetCoreObject()
+end
 local onDuty = false
 local apps = {}
 local fullyLoaded = false
@@ -10,7 +15,7 @@ display = false
 -- **  LOCALIZED FUNCTIONS WE USE ONLY IN THIS FILE
 
 -- Globalized shits
-PlayerData = QBCore.Functions.GetPlayerData()
+--PlayerData = QBCore.Functions.GetPlayerData()
 
 local function hadApp(app)
     if not app or not apps then return end
@@ -26,10 +31,19 @@ end
 -- A function which returns the applications that the player should have access to.
 local Looping = false -- Makes it so it dosnt get spammed
 local function GetPlayerAppPerms()
+    local Player = Framework.PlayerDataC()
     if Looping then return end
     Looping = true
-    if not PlayerData then return end
-    local playerJob, playerGang = PlayerData.job.name, PlayerData.gang.name
+    if not Player then return end
+    local gangInfo = nil
+    if GConfig.Framework == "qbcore" then
+        gangInfo = Player.Gang
+    else
+        gangInfo = {
+            name = "none" --- add esx gang system stuff here if you want.
+        }
+    end
+    local playerJob, playerGang = Player.Job.name, gangInfo.name
     local tempApps = {}
     for _, app in pairs(Config.Apps) do
         local converted = {
@@ -47,7 +61,7 @@ local function GetPlayerAppPerms()
         end
 
 
-        if playerJob and playerGang and PlayerData.items then
+        if playerJob and playerGang then
             local searches = 0
             if (#app.job > #app.gang and #app.job > #app.bannedJobs) then
                 searches = #app.job
@@ -115,13 +129,13 @@ local function Animation()
     -- Animation
     if not HasAnimDictLoaded(tabletDict) then
         RequestAnimDict(tabletDict)
-        while not HasAnimDictLoaded(tabletDict) do Citizen.Wait(100) end
+        while not HasAnimDictLoaded(tabletDict) do Wait(100) end
     end
 
     -- Model
     if not HasModelLoaded(tabletProp) then
         RequestModel(tabletProp)
-        while not HasModelLoaded(tabletProp) do Citizen.Wait(100) end
+        while not HasModelLoaded(tabletProp) do Wait(100) end
     end
 
     local plyPed = PlayerPedId()
@@ -176,21 +190,14 @@ end
 
 -- A generic function that checks if a player has a item client side, good for faster queries for non damaging events
 function haveItem(item) -- Trigger this like if haveItem("bread") then whatever end
-    if not PlayerData or not item then return end
-    if PlayerData.items then
-        for _, v in pairs(PlayerData.items) do
-            if v.name == item then
-                return true
-            end
-        end
-    end
-
-    return false
+    if not item then return false end
+    local hasItem = Framework.TriggerServerCallback('jl-laptop:server:haveItem', item)
+    return hasItem
 end
 
 function isPolice()
-    if not PlayerData then return end
-    local job = PlayerData.job.name
+    local Player = Framework.PlayerDataC()
+    local job = Player.Job.name
     for i = 1, #Config.PoliceJobs do
         if job == Config.PoliceJobs[i] then -- and onDuty didnt add this cuz testing
             return true
@@ -232,7 +239,7 @@ end)
 
 RegisterNUICallback("loaded", function(_, cb)
     fullyLoaded = true
-    print("LOADED")
+    --print("LOADED")
     cb(true)
 end)
 
@@ -243,13 +250,13 @@ RegisterNUICallback('getapp', function(_, cb)
 end)
 
 -- Handles state if resource is restarted live.
-AddEventHandler('onResourceStart', function(resource)
+--[[AddEventHandler('onResourceStart', function(resource)
     if GetCurrentResourceName() == resource then
         if LocalPlayer.state.isLoggedIn then
             PlayerData = QBCore.Functions.GetPlayerData()
         end
     end
-end)
+end)]]
 
 function CalculateTimeToDisplay()
     local hour = GetClockHours()
@@ -281,87 +288,91 @@ RegisterNUICallback('laptop/checkout', function(data, cb)
         cart = data['cart'],
         app = data['app']
     }
-    QBCore.Functions.TriggerCallback('jl-laptop:server:checkout', function(result)
-        if result == "bank" then
+    local result = Framework.TriggerServerCallback('jl-laptop:server:checkout', newData)
+    if result == "bank" then
+        cb({
+            status = 'error',
+            message = Locales.main.checkout.bank
+        })
+    elseif result == "full" then
+        cb({
+            status = 'error',
+            message = Locales.main.checkout.full
+        })
+    elseif result == "crypto" then
+        cb({
+            status = 'error',
+            message = Locales.main.checkout.crypto
+        })
+    elseif result == "spaces" then
+        cb({
+            status = "error",
+            message = Locales.main.checkout.spaces
+        })
+    elseif result == "done" then
+        if newData.app == "darkweb" then
             cb({
-                status = 'error',
-                message = Lang:t('main.checkout.bank')
+                status = 'success',
+                message = Locales.main.checkout.done_darkweb
             })
-        elseif result == "full" then
+        else
             cb({
-                status = 'error',
-                message = Lang:t('main.checkout.full')
+                status = 'success',
+                message = Locales.main.checkout.done_else
             })
-        elseif result == "crypto" then
-            cb({
-                status = 'error',
-                message = Lang:t('main.checkout.crypto')
-            })
-        elseif result == "spaces" then
-            cb({
-                status = "error",
-                message = Lang:t("main.checkout.spaces")
-            })
-        elseif result == "done" then
-            if newData.app == "darkweb" then
-                cb({
-                    status = 'success',
-                    message = Lang:t('main.checkout.done_darkweb')
-                })
-            else
-                cb({
-                    status = 'success',
-                    message = Lang:t('main.checkout.done_else')
-                })
-            end
-
         end
-    end, newData)
+
+    end
 end)
 
 
 RegisterNUICallback('setting/save', function(data, cb)
     -- prevents spamming metadata and server side settings
-    if data["setting"].darkfont == PlayerData.metadata['laptop'].darkfont and
-        data["setting"].background == PlayerData.metadata['laptop'].background then return end
+    --if data["setting"].darkfont == PlayerData.metadata['laptop'].darkfont and
+        --data["setting"].background == PlayerData.metadata['laptop'].background then return end
     cb("ok")
     TriggerServerEvent("jl-laptop:server:settings:set", data["setting"])
 end)
 
 RegisterNUICallback("setting/get", function(_, cb)
-    if PlayerData.metadata['laptop'] then
-        cb({
-            status = true,
-            data = PlayerData.metadata['laptop']
-        })
-    else
-        cb({
-            status = false,
-            data = {}
-        })
-    end
+    cb({
+        status = false,
+        data = {}
+    })
+
 end)
 
-RegisterNetEvent('QBCore:Client:OnPlayerLoaded', function()
-    PlayerData = QBCore.Functions.GetPlayerData()
+
+AddEventHandler('710-lib:PlayerLoaded', function()
+    CreateThread(function()
+        Wait(5000)
+        local Player = Framework.PlayerDataC()
+        local CID = Player.Pid
+        if Config.Inventory == 'ox_inventory' then
+            TriggerServerEvent('jl-laptop:server:createStashes', CID)
+        end
+    end)
 end)
 
--- Resets state on logout, in case of character change.
-RegisterNetEvent('QBCore:Client:OnPlayerUnload', function()
-    PlayerData = nil
-end)
 
--- Handles state when PlayerData is changed. We're just looking for inventory updates.
-RegisterNetEvent('QBCore:Player:SetPlayerData', function(val)
-    PlayerData = val
-    GetPlayerAppPerms()
-end)
 
 -- Everytime a cop goes on or off duty the cop count is updated.
 RegisterNetEvent('police:SetCopCount', function(amount)
     CurrentCops = amount
 end)
 
-RegisterNetEvent('QBCore:Client:SetDuty', function(duty)
+--[[RegisterNetEvent('QBCore:Client:SetDuty', function(duty)
     onDuty = duty
-end)
+end)]]
+
+
+function GetAllItemInfo()
+    local items = {}
+    for item, data in pairs(exports.ox_inventory:Items()) do
+        items[item] = {
+            label = data.label,
+            description = data.description,
+        }
+    end
+    return items
+end

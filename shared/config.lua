@@ -1,6 +1,6 @@
 Config = {}
 
-Config.Inventory = "qb-inventory"
+Config.Inventory = "ox_inventory"
 Config.LaptopDevice = "laptop"
 
 Config.RenewedPhone = false
@@ -24,7 +24,7 @@ Config.Apps = {
         bannedJobs = { "police" }, -- Must be a table { 'police' }
         gang = {}, -- Must be a table { 'ballas' }
         item = { "vpn" }, -- Must be a table { 'vpn' }
-        default = false -- if true, it will be added by default, ignoring all the previously set parameters
+        default = true -- if true, it will be added by default, ignoring all the previously set parameters
     },
     ['setting'] = {
         app = 'setting',
@@ -63,6 +63,6 @@ Config.Apps = {
         bannedJobs = { "police" },
         gang = {},
         item = { "vpn" },
-        default = false
+        default = true
     }
 }

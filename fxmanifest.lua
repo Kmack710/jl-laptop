@@ -6,13 +6,20 @@ author 'JL Development, Renewed, and others'
 
 lua54 'yes' -- Add in case you want to use lua 5.4 (https://www.lua.org/manual/5.4/manual.html)
 
+
+
+
 shared_scripts {
-    '@qb-core/shared/locale.lua',
-	'locales/*.lua',
+	'locales/en.lua',
     'shared/config.lua',
     'shared/boosting.lua',
     'shared/bennys.lua',
     'shared/darkweb.lua',
+    'shared/vehclasses.lua',
+}
+server_scripts {
+    '@oxmysql/lib/MySQL.lua',
+    'server/*.lua'
 }
 
 client_scripts {
@@ -24,10 +31,7 @@ client_scripts {
     'client/*.lua'
 }
 
-server_scripts {
-    '@oxmysql/lib/MySQL.lua',
-    'server/*.lua'
-}
+
 
 ui_page 'html/index.html'
 

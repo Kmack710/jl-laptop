@@ -1,3 +1,13 @@
+## Just an edit of jl-laptop to work with my scripts 
+## This is set up to work directly with 710-carBoosting on ESX or qbcore! 
+
+## All credit goes to the orginal creators - I just did this edit cause I suck at UI and figured others would like this edit as well that use my script!
+
+
+## Requires https://github.com/kmack710/710-lib 
+
+## All other apps work like before Just the boosting app was edited to work with 710-carBoosting 
+
 # [CLICK THIS TO READ THE DOCS / INSTALLATION](https://justlazzy.github.io/docs/free-scripts/jl-laptop/)
 
 # [CLICK THIS TO READ THE DOCS / INSTALLATION](https://justlazzy.github.io/docs/free-scripts/jl-laptop/)

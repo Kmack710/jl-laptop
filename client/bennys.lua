@@ -1,30 +1,65 @@
-local QBCore = exports['qb-core']:GetCoreObject()
+local Framework = exports['710-lib']:GetFrameworkObject()
+local GConfig = Framework.Config()
+local QBCore = nil
+if GConfig.Framework == "qbcore" then
+    QBCore = exports['qb-core']:GetCoreObject()
+end
 
 RegisterNUICallback('bennys/getitems', function(_, cb)
     local translated = {}
-    for _, v in pairs(Config.Bennys.Items) do
-
-        translated[#translated + 1] = {
-            name = v.name,
-            label = QBCore.Shared.Items[v.name].label,
-            image = Config.Inventory .. "/html/images/" .. QBCore.Shared.Items[v.name].image,
-            price = v.price,
-            stock = v.stock,
-            category = v.category,
-        }
+    local itemInfo = {}
+    if Config.Inventory == "ox_inventory" then
+        itemInfo = GetAllItemInfo()
     end
-    print(json.encode(translated))
+    for _, v in pairs(Config.Bennys.Items) do
+        if Config.Inventory == "ox_inventory" then
+            translated[#translated + 1] = {
+                name = v.name,
+                label = itemInfo[v.name].label,
+                image = Config.Inventory .. "/web/images/" .. v.name..".png",
+                price = v.price,
+                stock = v.stock,
+                category = v.category,
+            }
+        else
+            translated[#translated + 1] = {
+                name = v.name,
+                label = QBCore.Shared.Items[v.name].label,
+                image = Config.Inventory .. "/html/images/" .. QBCore.Shared.Items[v.name].image,
+                price = v.price,
+                stock = v.stock,
+                category = v.category,
+            }
+        end
+    end
+    --print(json.encode(translated))
     cb(translated)
 end)
 
+
+
 local function openStash()
-    local CID = QBCore.Functions.GetPlayerData().citizenid
-    TriggerServerEvent("inventory:server:OpenInventory", "stash", "BennyShop_" .. CID, {
-        maxweight = 100000,
-        slots = 25,
-    })
-    TriggerEvent("inventory:client:SetCurrentStash", "BennyShop_" .. CID)
+    local Player = Framework.PlayerDataC()
+    local CID = Player.Pid
+    if GConfig.Framework == 'esx' then 
+        --Framework.OpenStash("BennyShop", {maxweight = 100000, slots = 25})
+        Framework.OpenStash({id = "BennyShop", owner = CID}, {maxweight = 100000, slots = 25})
+    else
+        Framework.OpenStash("BennyShop"..CID, {maxweight = 100000, slots = 25})
+    end
 end
+
+RegisterNetEvent('jl-laptop:OpenBennysShopStash', function()
+    local Player = Framework.PlayerDataC()
+    local CID = Player.Pid
+    if GConfig.Framework == 'esx' then 
+        Framework.OpenStash({id = "BennyShop", owner = CID}, {maxweight = 100000, slots = 25})
+    else
+        Framework.OpenStash("BennyShop"..CID, {maxweight = 100000, slots = 25})
+    end
+end)
+
+exports('openStash', openStash)
 
 local ped = nil
 local blip = nil
@@ -44,19 +79,36 @@ CreateThread(function()
     FreezeEntityPosition(ped, true)
     SetEntityInvincible(ped, true)
     SetBlockingOfNonTemporaryEvents(ped, true)
-
-    exports['qb-target']:AddTargetEntity(ped, {
-        options = {
-            {
-                label = Lang:t('bennys.warehouse'),
-                icon = "fa-solid fa-warehouse",
-                action = function()
-                    openStash()
-                end,
+    if GConfig.InputTarget == 'ox_target' then
+        exports.ox_target:addBoxZone({
+            coords = vec3(v.coords.x, v.coords.y, v.coords.z),
+            size = vec3(1, 1, 2),
+            rotation = v.coords.w,
+            debug = false,
+            options = {
+                {
+                    name = 'ox:bennywarehouseped',
+                    label = Locales.bennys.warehouse,
+                    icon = "fa-solid fa-warehouse",
+                    event = 'jl-laptop:OpenBennysShopStash'
+                }
             }
-        },
-        distance = 2.0
-    })
+        })
+    else
+            exports[GConfig.InputTarget]:AddTargetEntity(ped, {
+            options = {
+                {
+                    label = Locales.bennys.warehouse,
+                    icon = "fa-solid fa-warehouse",
+                    action = function()
+                        openStash()
+                    end,
+                }
+            },
+            distance = 2.0
+        })
+    end
+
 
 
     blip = AddBlipForCoord(v.coords.x, v.coords.y, v.coords.z)

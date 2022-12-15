@@ -1,40 +1,62 @@
-local QBCore = exports['qb-core']:GetCoreObject()
+local Framework = exports['710-lib']:GetFrameworkObject()
+local GConfig = Framework.Config()
+local QBCore = {}
+if GConfig.Framework == "qbcore" then
+    QBCore = exports['qb-core']:GetCoreObject()
+end
 local crateCount = 0
 crates = {} -- Table which stores crate netIDs with its contents ( shop items )
 
-local function AddItems(stash, Items)
-    local items = {}
-
-    for k, v in pairs(Items) do
-        local itemInfo = QBCore.Shared.Items[k:lower()]
-        items[#items + 1] = {
-            name = itemInfo["name"],
-            amount = tonumber(v),
-            info = {}, --Fixed The Weapons Issue
-            label = itemInfo["label"],
-            description = itemInfo["description"] ~= nil and itemInfo["description"] or "",
-            weight = itemInfo["weight"],
-            type = itemInfo["type"],
-            unique = itemInfo["unique"],
-            useable = itemInfo["useable"],
-            image = itemInfo["image"],
-            slot = #items + 1,
-        }
+local function AddItems(stash, Items, PID)
+    if GConfig.Framework == "qbcore" then
+        local items = {}
+        for k, v in pairs(Items) do
+            local itemInfo = QBCore.Shared.Items[k:lower()]
+            items[#items + 1] = {
+                name = itemInfo["name"],
+                amount = tonumber(v),
+                info = {}, --Fixed The Weapons Issue
+                label = itemInfo["label"],
+                description = itemInfo["description"] ~= nil and itemInfo["description"] or "",
+                weight = itemInfo["weight"],
+                type = itemInfo["type"],
+                unique = itemInfo["unique"],
+                useable = itemInfo["useable"],
+                image = itemInfo["image"],
+                slot = #items + 1,
+            }
+        end
+        MySQL.Async.insert('INSERT INTO stashitems (stash, items) VALUES (:stash, :items) ON DUPLICATE KEY UPDATE items = :items'
+            , {
+            ['stash'] = stash,
+            ['items'] = json.encode(items)
+        })
+    else
+        for k,v in pairs(Items) do
+            if stash == "BennyShop" then
+                exports.ox_inventory:GetInventory(stash, PID)
+                exports.ox_inventory:AddItem(stash..":"..PID, k, v)
+            else
+                exports.ox_inventory:GetInventory(stash, false)
+                exports.ox_inventory:AddItem(stash, k, v)
+            end
+        end
     end
-
-    MySQL.Async.insert('INSERT INTO stashitems (stash, items) VALUES (:stash, :items) ON DUPLICATE KEY UPDATE items = :items'
-        , {
-        ['stash'] = stash,
-        ['items'] = json.encode(items)
-    })
 end
 
 local function HasStashItems(stashId)
-    local result = MySQL.Sync.fetchScalar('SELECT items FROM stashitems WHERE stash = ?', { stashId })
-    if not result then return end
-    local stashItems = json.decode(result)
-    if not stashItems then return end
-
+    local stashItems = nil
+    if GConfig.Framework == "qbcore" then
+        local result = MySQL.Sync.fetchScalar('SELECT items FROM stashitems WHERE stash = ?', { stashId })
+        if not result then return end
+        stashItems = json.decode(result)
+        if not stashItems then return end
+    else 
+        local result = exports.ox_inventory:GetInventoryItems(stashId, false)
+        if not result then return end
+        stashItems = json.decode(result)
+        if not stashItems then return end
+    end
     return true, #stashItems
 end
 
@@ -93,13 +115,14 @@ local function createCrate(items, coords)
     end
 end
 
-QBCore.Functions.CreateCallback('jl-laptop:server:checkout', function(source, cb, data)
+Framework.RegisterServerCallback('jl-laptop:server:checkout', function(source, cb, data)
     local src = source
     local appLabel = 'Bennys'
     if data.app == 'darkweb' then
         appLabel = 'DarkWeb'
     end
-    local Player = QBCore.Functions.GetPlayer(src)
+    local Player = Framework.PlayerDataS(src)
+    local CID = Player.Pid
     local darkwebCrateSpawn = GenerateCrateSpawn()
     if not HasAppAccess(src, data['app']) then return cb("full") end
     local Saved = data['cart']
@@ -120,14 +143,14 @@ QBCore.Functions.CreateCallback('jl-laptop:server:checkout', function(source, cb
                 Shop.totalGNE = Shop.totalGNE + (Config[appLabel].Items[v.name].price * v.quantity)
             end
         end
-        local hasItem, amount = HasStashItems(appLabel .. "Shop_" .. Player.PlayerData.citizenid)
+        local hasItem, amount = HasStashItems(appLabel .. "Shop_" .. Player.Pid)
         if hasItem and amount > 0 then return cb("full") end
         local checks = 0
         local bank = false
         local crypto = false
         if Shop.totalBank > 0 then
             checks = checks + 1
-            if Player.PlayerData.money.bank >= Shop.totalBank then
+            if Player.Bank >= Shop.totalBank then
                 checks = checks - 1
                 bank = true
             else
@@ -137,7 +160,7 @@ QBCore.Functions.CreateCallback('jl-laptop:server:checkout', function(source, cb
 
         if Shop.totalCrypto > 0 then
             checks = checks + 1
-            if Player.PlayerData.money.crypto >= Shop.totalCrypto then
+            if Player.CryptoBalance('GNE') >= Shop.totalCrypto then
                 checks = checks - 1
                 crypto = true
             else
@@ -150,14 +173,14 @@ QBCore.Functions.CreateCallback('jl-laptop:server:checkout', function(source, cb
                 return cb("spaces")
             else
                 darkwebCrateSpawn.isbusy = true
-                print(json.encode(Config.DarkWeb.CrateSpawn))
+                --print(json.encode(Config.DarkWeb.CrateSpawn))
             end
         end
 
         if checks == 0 then
-            if bank then Player.Functions.RemoveMoney("bank", Shop.totalBank) end
+            if bank then Player.RemoveBankMoney(Shop.totalBank) end
 
-            if crypto then Player.Functions.RemoveMoney("crypto", Shop.totalCrypto) end
+            if crypto then Player.RemoveCrypto("GNE", Shop.totalCrypto) end
 
             if data['app'] == 'darkweb' then
                 cb("done")
@@ -165,7 +188,11 @@ QBCore.Functions.CreateCallback('jl-laptop:server:checkout', function(source, cb
                     createCrate(Shop.items, darkwebCrateSpawn.coords)
                 end
             else
-                AddItems("BennyShop_" .. Player.PlayerData.citizenid, Shop.items)
+                if GConfig.Framework == 'qbcore' then
+                    AddItems("BennyShop" .. Player.Pid, Shop.items)
+                else
+                    AddItems("BennyShop", Shop.items, Player.Pid)
+                end
                 cb("done")
             end
 
