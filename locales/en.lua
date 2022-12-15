@@ -1,4 +1,4 @@
-local Translations = {
+Locales = {
     boosting = {
         error = {
             disable_fail = "You failed to disable the tracker",
@@ -97,7 +97,3 @@ local Translations = {
     }
 }
 
-Lang = Lang or Locale:new({
-    phrases = Translations,
-    warnOnMissing = true
-})
